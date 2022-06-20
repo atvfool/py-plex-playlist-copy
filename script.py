@@ -1,59 +1,49 @@
+import os
+import shutil
+from urllib import response
 from xml.dom import minidom
 import constants
 
-def GetSizeScript(files):
+def GetSize(files):
   # init $total variable
-  '$total = 0 \r\n'
-  script = ''
+  total = 0
   # loop through parts
   for file in files:
     xmlParts = file.getElementsByTagName('Part')
     for elem in xmlParts:
-      file = elem.attributes['file'].value
-      script += "$total += (Get-Item \"" + constants.SERVER_SHARE + file.replace(constants.FILE_REPLACE, '').replace('/', '\\') + "\").length/1GB\r\n"  
+      file = elem.attributes['file'].value.replace(constants.FILE_REPLACE, '').replace('/', '\\')
+      if constants.PRINT_FILES:
+        print(file)
+      size = os.stat(constants.SERVER_SHARE + file).st_size
+      total += size
 
-  script += "Write-Host($total)\r\n"
-  return script
+  return round(total/1000000000, 3)
 
-def GetCopyScript(files):
-  # init $total variable
-  script = ''
+def CopyFiles(files):
+  print('**************************Copying Files Start**************************')
   for file in files:
     xmlParts = file.getElementsByTagName('Part')
     # loop through parts
     for elem in xmlParts:
       id = elem.attributes["id"].value
-      file = elem.attributes['file'].value
-      script += 'Write-Host("Copying Part ID: ' + id + '")\r\n'
-      script += copyCommand(file)
-  script += 'Write-Host("Copying Complete")\r\n'
-  return script
-
-def copyCommand(file):
-  return "Copy-Item \"" + constants.SERVER_SHARE  + file.replace(constants.FILE_REPLACE, '').replace('/', '\\') + "\"\r\n"
+      file = constants.SERVER_SHARE + elem.attributes['file'].value.replace(constants.FILE_REPLACE, '').replace('/', '\\')
+      print("copying ID: " + id + " file: " + file)
+      shutil.copy(file, constants.DESTINATION)
+  print("**************************Copying Files Complete**************************")
 
 def __main__():
   # parse an xml file by name
   files = []
   for file in constants.FILES:
       files.append(minidom.parse(file))
-  # init script variable
-  script = ''
-  # Create Get size script
-  script += GetSizeScript(files)
-  # write script to file
-  scriptFile = open('GetSize.ps1', 'w') # overwrite
-  scriptFile.write(script)
-  scriptFile.close()
-  # Create the copy files script
-  # init script variable
-  script = ''
-  # Create copy script
-  script += GetCopyScript(files)
-  # write script to file
-  scriptFile = open('CopyFiles.ps1', 'w') # overwrite
-  scriptFile.write(script)
-  scriptFile.close()
+  size = GetSize(files)
+  print("Total Size:" + str(size) + " GB")
 
+  response = input("Do you want to start copying? (Y/N): ")
+
+  if(response.upper() == 'Y'):
+    CopyFiles(files)
+  else:
+    print("Exiting script")
 
 __main__()
