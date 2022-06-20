@@ -1,0 +1,4 @@
+*.ps1
+*.xml
+constants.py
+__pycache__/*
