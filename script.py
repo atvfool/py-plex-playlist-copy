@@ -1,15 +1,22 @@
+from asyncore import loop
+from copy import copy
 import os
 import shutil
 from urllib import response
 from xml.dom import minidom
 import constants
+import requests
+import time
 
-def GetSize(files):
-  # init $total variable
+###
+# gets the size of the selected playlists
+###
+def getSize(playlists):
   total = 0
-  # loop through parts
-  for file in files:
-    xmlParts = file.getElementsByTagName('Part')
+  
+  for playlist in playlists:
+    response = requests.get(constants.PLEX_ADDR + playlist["path"])
+    xmlParts = minidom.parseString(response.text).getElementsByTagName("Part")
     for elem in xmlParts:
       file = elem.attributes['file'].value.replace(constants.FILE_REPLACE, '').replace('/', '\\')
       if constants.PRINT_FILES:
@@ -19,11 +26,14 @@ def GetSize(files):
 
   return round(total/1000000000, 3)
 
-def CopyFiles(files):
+###
+# copies the playlists selected to the destination 
+###
+def copyFiles(playlists):
   print('**************************Copying Files Start**************************')
-  for file in files:
-    xmlParts = file.getElementsByTagName('Part')
-    # loop through parts
+  for playlist in playlists:
+    response = requests.get(constants.PLEX_ADDR + playlist["path"])
+    xmlParts = minidom.parseString(response.text).getElementsByTagName("Part")
     for elem in xmlParts:
       id = elem.attributes["id"].value
       file = constants.SERVER_SHARE + elem.attributes['file'].value.replace(constants.FILE_REPLACE, '').replace('/', '\\')
@@ -31,19 +41,65 @@ def CopyFiles(files):
       shutil.copy(file, constants.DESTINATION)
   print("**************************Copying Files Complete**************************")
 
+###
+# Selects the playlists
+###
+def selectPlaylists():
+  playlistsToCopy = []
+  response = requests.get(constants.PLEX_ADDR + "/playlists/")
+  playlistsXML = minidom.parseString(response.text).getElementsByTagName("Playlist")
+  playlist = {}
+  i=1
+  for playlistXML in playlistsXML:
+    playlist[i] = {'name':playlistXML.attributes["title"].value, 'path':playlistXML.attributes["key"].value.replace(constants.FILE_REPLACE, '')}
+    i+=1
+  for item in playlist:
+    print("[" + str(item) + "]: " + playlist[item]["name"])
+  
+  temp = input("Enter playlists separated by commas: ")
+  ids = temp.split(',')
+  for id in ids:
+    playlistsToCopy.append(playlist[int(id)])
+  return playlistsToCopy
+
+###
+# prints the menu
+###
+def printMenu():
+  print("Select an options below:")
+  print("[1]: Select Playlists")
+  print("[2]: Set Options (Not implemented yet, set constants.py)")
+  print("[3]: Get Size of selected playlist")
+  print('[4]: Copy Playlists')
+  print('[5]: Exit')
+
 def __main__():
-  # parse an xml file by name
-  files = []
-  for file in constants.FILES:
-      files.append(minidom.parse(file))
-  size = GetSize(files)
-  print("Total Size:" + str(size) + " GB")
-
-  response = input("Do you want to start copying? (Y/N): ")
-
-  if(response.upper() == 'Y'):
-    CopyFiles(files)
-  else:
-    print("Exiting script")
+  option = 0
+  playlistsToCopy = []
+  while(option != 5):
+    printMenu()
+    selectedOption = input("Enter option: ")
+    option = int(selectedOption)
+    if(option == 1):
+      playlistsToCopy = selectPlaylists()
+      for playlist in playlistsToCopy:
+        print(playlist["name"])
+    elif(option == 2):
+      print("set options")
+      print("This feature isn't working yet, set options via constants.py")
+    elif(option == 3):
+      if(len(playlistsToCopy) <= 0):
+        print("Select playlists first")
+      else:
+        size = getSize(playlistsToCopy)
+        print("File size of the following playlists in GB: " + str(size))
+        for playlist in playlistsToCopy:
+          print(playlist["name"])
+    elif(option == 4):
+      if(len(playlistsToCopy) <= 0):
+        print("Select playlists first")
+      else:
+        copyFiles(playlistsToCopy)
+    time.sleep(1.5)
 
 __main__()
